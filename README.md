@@ -1,8 +1,11 @@
 #  PHP_Laravel12_Temporary_Directory
 
-![Laravel](https://img.shields.io/badge/Laravel-12-red)
-![PHP](https://img.shields.io/badge/PHP-8.2+-blue)
-![Status](https://img.shields.io/badge/Project-Demo-success)
+<p align="center">
+<a href="#"><img src="https://img.shields.io/badge/Laravel-12-red" alt="Laravel Version"></a>
+<a href="#"><img src="https://img.shields.io/badge/PHP-8.2+-blue" alt="PHP Version"></a>
+<a href="#"><img src="https://img.shields.io/badge/Spatie-TemporaryDirectory-orange" alt="Package"></a>
+<a href="#"><img src="https://img.shields.io/badge/Status-Demo_Project-success" alt="Project Status"></a>
+</p>
 
 A Laravel 12 demo project showing how to use **Spatie Temporary Directory** for safely creating temporary files, downloading generated files, creating ZIP archives dynamically, and automatically cleaning temporary storage.
 
