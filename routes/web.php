@@ -3,20 +3,46 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\TempFileController;
 
-// Redirect homepage to temporary directory demo page
 Route::get('/', fn () => redirect('/temp'));
 
-// Show main demo UI page
-Route::get('/temp', [TempFileController::class,'index'])->name('temp.index');
+Route::get(
+    '/temp',
+    [TempFileController::class, 'index']
+)->name('temp.index');
 
-// Create temporary file and show success message
-Route::get('/temp/create', [TempFileController::class,'createTemp'])
-    ->name('temp.create');
+Route::get(
+    '/temp/create',
+    [TempFileController::class, 'createTemp']
+)->name('temp.create');
 
-// Download generated temporary file
-Route::get('/temp/download', [TempFileController::class,'downloadTempFile'])
-    ->name('temp.download');
+Route::get(
+    '/temp/download',
+    [TempFileController::class, 'downloadTempFile']
+)->name('temp.download');
 
-// Create ZIP file from temp files and download it
-Route::get('/temp/zip', [TempFileController::class,'createZip'])
-    ->name('temp.zip');
+Route::get(
+    '/temp/zip',
+    [TempFileController::class, 'createZip']
+)->name('temp.zip');
+
+/*
+|--------------------------------------------------------------------------
+| Temporary File Activity CSV Export
+|--------------------------------------------------------------------------
+*/
+
+Route::get(
+    '/temp/export-csv',
+    [TempFileController::class, 'exportCsv']
+)->name('temp.export.csv');
+
+/*
+|--------------------------------------------------------------------------
+| Temporary Storage Cleanup
+|--------------------------------------------------------------------------
+*/
+
+Route::post(
+    '/temp/cleanup',
+    [TempFileController::class, 'cleanup']
+)->name('temp.cleanup');
