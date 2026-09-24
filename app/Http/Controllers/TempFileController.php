@@ -10,6 +10,9 @@ use ZipArchive;
 
 class TempFileController extends Controller
 {
+    /**
+     * Temporary Directory Dashboard
+     */
     public function index(Request $request)
     {
         $search = $request->input('search');
@@ -17,7 +20,59 @@ class TempFileController extends Controller
         $operation = $request->input('operation');
         $status = $request->input('status');
 
+        $dateFrom = $request->input('date_from');
+        $dateTo = $request->input('date_to');
+
+        $quickFilter = $request->input('quick_filter');
+
+        $sort = $request->input('sort', 'created_at');
+        $direction = $request->input('direction', 'desc');
+
+        $perPage = (int) $request->input('per_page', 5);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Allowed values
+        |--------------------------------------------------------------------------
+        */
+
+        $allowedSorts = [
+            'id',
+            'file_name',
+            'file_size',
+            'file_type',
+            'operation',
+            'status',
+            'created_at',
+        ];
+
+        if (!in_array($sort, $allowedSorts)) {
+            $sort = 'created_at';
+        }
+
+        if (!in_array($direction, ['asc', 'desc'])) {
+            $direction = 'desc';
+        }
+
+        $allowedPerPage = [5, 8, 15, 25, 50];
+
+        if (!in_array($perPage, $allowedPerPage)) {
+            $perPage = 5;
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Activity Query
+        |--------------------------------------------------------------------------
+        */
+
         $activitiesQuery = TemporaryFileActivity::query();
+
+        /*
+        |--------------------------------------------------------------------------
+        | File Search
+        |--------------------------------------------------------------------------
+        */
 
         if ($search) {
             $activitiesQuery->where(
@@ -27,22 +82,128 @@ class TempFileController extends Controller
             );
         }
 
+        /*
+        |--------------------------------------------------------------------------
+        | File Type
+        |--------------------------------------------------------------------------
+        */
+
         if ($type) {
-            $activitiesQuery->where('file_type', $type);
+            $activitiesQuery->where(
+                'file_type',
+                $type
+            );
         }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Operation
+        |--------------------------------------------------------------------------
+        */
 
         if ($operation) {
-            $activitiesQuery->where('operation', $operation);
+            $activitiesQuery->where(
+                'operation',
+                $operation
+            );
         }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Status
+        |--------------------------------------------------------------------------
+        */
 
         if ($status) {
-            $activitiesQuery->where('status', $status);
+            $activitiesQuery->where(
+                'status',
+                $status
+            );
         }
 
+        /*
+        |--------------------------------------------------------------------------
+        | Date From
+        |--------------------------------------------------------------------------
+        */
+
+        if ($dateFrom) {
+            $activitiesQuery->whereDate(
+                'created_at',
+                '>=',
+                $dateFrom
+            );
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Date To
+        |--------------------------------------------------------------------------
+        */
+
+        if ($dateTo) {
+            $activitiesQuery->whereDate(
+                'created_at',
+                '<=',
+                $dateTo
+            );
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Quick Filters
+        |--------------------------------------------------------------------------
+        */
+
+        if ($quickFilter === 'today') {
+            $activitiesQuery->whereDate(
+                'created_at',
+                today()
+            );
+        }
+
+        if ($quickFilter === '7days') {
+            $activitiesQuery->where(
+                'created_at',
+                '>=',
+                now()->subDays(7)
+            );
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | Sorting
+        |--------------------------------------------------------------------------
+        */
+
+        $activitiesQuery->orderBy(
+            $sort,
+            $direction
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Pagination
+        |--------------------------------------------------------------------------
+        */
+
         $activities = $activitiesQuery
-            ->latest()
-            ->paginate(8)
+            ->paginate($perPage)
             ->withQueryString();
+
+        /*
+        |--------------------------------------------------------------------------
+        | Filtered Result Count
+        |--------------------------------------------------------------------------
+        */
+
+        $filteredActivities = $activities->total();
+
+        /*
+        |--------------------------------------------------------------------------
+        | Overall Statistics
+        |--------------------------------------------------------------------------
+        */
 
         $totalActivities = TemporaryFileActivity::count();
 
@@ -75,6 +236,33 @@ class TempFileController extends Controller
             'file_size'
         );
 
+        /*
+        |--------------------------------------------------------------------------
+        | Today's Statistics
+        |--------------------------------------------------------------------------
+        */
+
+        $todayActivities = TemporaryFileActivity::whereDate(
+            'created_at',
+            today()
+        )->count();
+
+        $todayDownloads = TemporaryFileActivity::whereDate(
+            'created_at',
+            today()
+        )
+            ->where(
+                'operation',
+                'Download'
+            )
+            ->count();
+
+        /*
+        |--------------------------------------------------------------------------
+        | Storage Monitoring
+        |--------------------------------------------------------------------------
+        */
+
         $storedFiles = Storage::files();
 
         $storedFileCount = count($storedFiles);
@@ -83,30 +271,47 @@ class TempFileController extends Controller
 
         foreach ($storedFiles as $storedFile) {
             try {
-                $storedStorageBytes += Storage::size($storedFile);
+                $storedStorageBytes += Storage::size(
+                    $storedFile
+                );
             } catch (\Throwable $e) {
-                // Ignore files whose size cannot be read.
+                // Ignore unreadable files.
             }
         }
 
-        return view('temp.index', compact(
-            'activities',
-            'search',
-            'type',
-            'operation',
-            'status',
-            'totalActivities',
-            'totalFiles',
-            'totalZipFiles',
-            'totalDownloads',
-            'successfulOperations',
-            'failedOperations',
-            'totalStorageBytes',
-            'storedFileCount',
-            'storedStorageBytes'
-        ));
+        return view(
+            'temp.index',
+            compact(
+                'activities',
+                'search',
+                'type',
+                'operation',
+                'status',
+                'dateFrom',
+                'dateTo',
+                'quickFilter',
+                'sort',
+                'direction',
+                'perPage',
+                'filteredActivities',
+                'totalActivities',
+                'totalFiles',
+                'totalZipFiles',
+                'totalDownloads',
+                'successfulOperations',
+                'failedOperations',
+                'totalStorageBytes',
+                'storedFileCount',
+                'storedStorageBytes',
+                'todayActivities',
+                'todayDownloads'
+            )
+        );
     }
 
+    /**
+     * Create temporary file.
+     */
     public function createTemp()
     {
         $temp = TemporaryDirectory::make();
@@ -116,7 +321,10 @@ class TempFileController extends Controller
 
             $content = 'Temp file created at ' . now();
 
-            file_put_contents($file, $content);
+            file_put_contents(
+                $file,
+                $content
+            );
 
             Storage::put(
                 'demo.txt',
@@ -137,8 +345,7 @@ class TempFileController extends Controller
                 ->route('temp.index')
                 ->with(
                     'success',
-                    '📄 Temporary file created successfully! '
-                    . 'A copy was saved to storage/app/demo.txt.'
+                    '📄 Temporary file created successfully!'
                 );
 
         } catch (\Throwable $e) {
@@ -163,6 +370,9 @@ class TempFileController extends Controller
         }
     }
 
+    /**
+     * Download temporary TXT file.
+     */
     public function downloadTempFile()
     {
         $temp = TemporaryDirectory::make();
@@ -172,7 +382,10 @@ class TempFileController extends Controller
         try {
             $content = 'Export generated at ' . now();
 
-            file_put_contents($file, $content);
+            file_put_contents(
+                $file,
+                $content
+            );
 
             $fileSize = filesize($file);
 
@@ -221,6 +434,9 @@ class TempFileController extends Controller
         }
     }
 
+    /**
+     * Create ZIP archive.
+     */
     public function createZip()
     {
         $temp = TemporaryDirectory::make();
@@ -311,18 +527,283 @@ class TempFileController extends Controller
     }
 
     /**
-     * Export temporary file activity as CSV.
-     *
-     * The current search and filters are preserved.
+     * Export activity as CSV.
      */
     public function exportCsv(Request $request)
     {
+        $activities = $this->filteredQuery(
+            $request
+        )
+            ->latest()
+            ->get();
+
+        $fileName =
+            'temporary-file-activity-' .
+            now()->format('Y-m-d-H-i-s') .
+            '.csv';
+
+        $headers = [
+            'Content-Type' => 'text/csv',
+            'Content-Disposition' =>
+                'attachment; filename="' .
+                $fileName .
+                '"',
+            'Pragma' => 'no-cache',
+            'Cache-Control' =>
+                'must-revalidate, post-check=0, pre-check=0',
+            'Expires' => '0',
+        ];
+
+        return response()->streamDownload(
+            function () use ($activities) {
+
+                $handle = fopen(
+                    'php://output',
+                    'w'
+                );
+
+                fputcsv($handle, [
+                    'ID',
+                    'File Name',
+                    'File Type',
+                    'Operation',
+                    'File Size (Bytes)',
+                    'File Size (KB)',
+                    'Status',
+                    'Created At',
+                ]);
+
+                foreach ($activities as $activity) {
+
+                    fputcsv($handle, [
+                        $activity->id,
+                        $activity->file_name,
+                        $activity->file_type,
+                        $activity->operation,
+                        $activity->file_size,
+                        number_format(
+                            $activity->file_size / 1024,
+                            2,
+                            '.',
+                            ''
+                        ),
+                        $activity->status,
+                        $activity->created_at
+                            ->format('Y-m-d H:i:s'),
+                    ]);
+                }
+
+                fclose($handle);
+            },
+            $fileName,
+            $headers
+        );
+    }
+
+    /**
+     * Export activity as JSON.
+     */
+    public function exportJson(Request $request)
+    {
+        $activities = $this->filteredQuery(
+            $request
+        )
+            ->latest()
+            ->get();
+
+        $fileName =
+            'temporary-file-activity-' .
+            now()->format('Y-m-d-H-i-s') .
+            '.json';
+
+        $data = $activities->map(
+            function ($activity) {
+                return [
+                    'id' => $activity->id,
+                    'file_name' => $activity->file_name,
+                    'file_type' => $activity->file_type,
+                    'operation' => $activity->operation,
+                    'file_size_bytes' => $activity->file_size,
+                    'file_size_kb' =>
+                        round(
+                            $activity->file_size / 1024,
+                            2
+                        ),
+                    'status' => $activity->status,
+                    'created_at' =>
+                        $activity->created_at
+                            ->format('Y-m-d H:i:s'),
+                ];
+            }
+        );
+
+        return response()->streamDownload(
+            function () use ($data) {
+
+                echo json_encode(
+                    $data,
+                    JSON_PRETTY_PRINT
+                );
+            },
+            $fileName,
+            [
+                'Content-Type' =>
+                    'application/json',
+            ]
+        );
+    }
+
+    /**
+     * Delete one activity record.
+     */
+    public function delete($id)
+    {
+        $activity = TemporaryFileActivity::findOrFail(
+            $id
+        );
+
+        $activity->delete();
+
+        return redirect()
+            ->route('temp.index')
+            ->with(
+                'success',
+                '🗑️ Activity record deleted successfully.'
+            );
+    }
+
+    /**
+     * Delete all filtered activity records.
+     */
+    public function deleteFiltered(Request $request)
+    {
+        $query = $this->filteredQuery(
+            $request
+        );
+
+        $count = $query->count();
+
+        $query->delete();
+
+        return redirect()
+            ->route('temp.index')
+            ->with(
+                'success',
+                "🗑️ {$count} filtered activity record(s) deleted."
+            );
+    }
+
+    /**
+     * Delete all failed operations.
+     */
+    public function deleteFailed()
+    {
+        $count = TemporaryFileActivity::where(
+            'status',
+            'Failed'
+        )->count();
+
+        TemporaryFileActivity::where(
+            'status',
+            'Failed'
+        )->delete();
+
+        return redirect()
+            ->route('temp.index')
+            ->with(
+                'success',
+                "🧹 {$count} failed activity record(s) deleted."
+            );
+    }
+
+    /**
+     * Cleanup old activity and storage.
+     */
+    public function cleanup(Request $request)
+    {
+        $request->validate([
+            'days' => [
+                'required',
+                'integer',
+                'min:1',
+                'max:365',
+            ],
+        ]);
+
+        $days = (int) $request->days;
+
+        $cutoff = now()->subDays($days);
+
+        $oldActivities =
+            TemporaryFileActivity::where(
+                'created_at',
+                '<',
+                $cutoff
+            )->get();
+
+        $deletedFiles = 0;
+        $deletedBytes = 0;
+
+        foreach ($oldActivities as $activity) {
+
+            if ($activity->operation === 'Create') {
+
+                $path = $activity->file_name;
+
+                if (Storage::exists($path)) {
+
+                    try {
+                        $deletedBytes += Storage::size(
+                            $path
+                        );
+                    } catch (\Throwable $e) {
+                        // Ignore.
+                    }
+
+                    Storage::delete($path);
+
+                    $deletedFiles++;
+                }
+            }
+        }
+
+        $deletedActivities =
+            TemporaryFileActivity::where(
+                'created_at',
+                '<',
+                $cutoff
+            )->delete();
+
+        return redirect()
+            ->route('temp.index')
+            ->with(
+                'success',
+                "🧹 Cleanup completed! " .
+                "{$deletedFiles} stored file(s), " .
+                "{$deletedActivities} activity record(s), " .
+                $this->formatBytes($deletedBytes) .
+                " of storage were removed."
+            );
+    }
+
+    /**
+     * Reusable filtered query.
+     */
+    private function filteredQuery(
+        Request $request
+    ) {
+        $query = TemporaryFileActivity::query();
+
         $search = $request->input('search');
         $type = $request->input('type');
         $operation = $request->input('operation');
         $status = $request->input('status');
 
-        $query = TemporaryFileActivity::query();
+        $dateFrom = $request->input('date_from');
+        $dateTo = $request->input('date_to');
+
+        $quickFilter =
+            $request->input('quick_filter');
 
         if ($search) {
             $query->where(
@@ -353,138 +834,43 @@ class TempFileController extends Controller
             );
         }
 
-        $activities = $query
-            ->latest()
-            ->get();
-
-        $fileName = 'temporary-file-activity-'
-            . now()->format('Y-m-d-H-i-s')
-            . '.csv';
-
-        $headers = [
-            'Content-Type' => 'text/csv',
-            'Content-Disposition' =>
-                'attachment; filename="' . $fileName . '"',
-            'Pragma' => 'no-cache',
-            'Cache-Control' => 'must-revalidate, post-check=0, pre-check=0',
-            'Expires' => '0',
-        ];
-
-        return response()->streamDownload(
-            function () use ($activities) {
-
-                $handle = fopen(
-                    'php://output',
-                    'w'
-                );
-
-                /*
-                 * CSV header row.
-                 */
-                fputcsv($handle, [
-                    'ID',
-                    'File Name',
-                    'File Type',
-                    'Operation',
-                    'File Size (Bytes)',
-                    'File Size (KB)',
-                    'Status',
-                    'Created At',
-                ]);
-
-                /*
-                 * CSV data rows.
-                 */
-                foreach ($activities as $activity) {
-
-                    fputcsv($handle, [
-                        $activity->id,
-                        $activity->file_name,
-                        $activity->file_type,
-                        $activity->operation,
-                        $activity->file_size,
-                        number_format(
-                            $activity->file_size / 1024,
-                            2,
-                            '.',
-                            ''
-                        ),
-                        $activity->status,
-                        $activity->created_at
-                            ->format('Y-m-d H:i:s'),
-                    ]);
-                }
-
-                fclose($handle);
-            },
-            $fileName,
-            $headers
-        );
-    }
-
-    public function cleanup(Request $request)
-    {
-        $request->validate([
-            'days' => [
-                'required',
-                'integer',
-                'min:1',
-                'max:365'
-            ],
-        ]);
-
-        $days = (int) $request->days;
-
-        $cutoff = now()->subDays($days);
-
-        $oldActivities = TemporaryFileActivity::where(
-            'created_at',
-            '<',
-            $cutoff
-        )->get();
-
-        $deletedFiles = 0;
-        $deletedBytes = 0;
-
-        foreach ($oldActivities as $activity) {
-
-            if ($activity->operation === 'Create') {
-
-                $path = $activity->file_name;
-
-                if (Storage::exists($path)) {
-
-                    try {
-                        $deletedBytes += Storage::size($path);
-                    } catch (\Throwable $e) {
-                        // Ignore size calculation errors.
-                    }
-
-                    Storage::delete($path);
-
-                    $deletedFiles++;
-                }
-            }
+        if ($dateFrom) {
+            $query->whereDate(
+                'created_at',
+                '>=',
+                $dateFrom
+            );
         }
 
-        $deletedActivities = TemporaryFileActivity::where(
-            'created_at',
-            '<',
-            $cutoff
-        )->delete();
-
-        return redirect()
-            ->route('temp.index')
-            ->with(
-                'success',
-                "🧹 Cleanup completed! "
-                . "{$deletedFiles} stored file(s), "
-                . "{$deletedActivities} activity record(s), and "
-                . $this->formatBytes($deletedBytes)
-                . " of storage were removed."
+        if ($dateTo) {
+            $query->whereDate(
+                'created_at',
+                '<=',
+                $dateTo
             );
+        }
+
+        if ($quickFilter === 'today') {
+            $query->whereDate(
+                'created_at',
+                today()
+            );
+        }
+
+        if ($quickFilter === '7days') {
+            $query->where(
+                'created_at',
+                '>=',
+                now()->subDays(7)
+            );
+        }
+
+        return $query;
     }
 
+    /**
+     * Format bytes.
+     */
     private function formatBytes(
         int|float $bytes
     ): string {
